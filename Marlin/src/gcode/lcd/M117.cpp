@@ -27,13 +27,23 @@
 #include "../gcode.h"
 #include "../../lcd/marlinui.h"
 
+#if ENABLED(DWIN_CREALITY_LCD_JYERSUI)
+	#include "../../lcd/e3v2/jyersui/dwin.h"
+#endif
+
+
 /**
  * M117: Set LCD Status Message
  */
 void GcodeSuite::M117() {
 
   if (parser.string_arg && parser.string_arg[0])
-    ui.set_status_no_expire(parser.string_arg);
+    /* ui.set_status_no_expire(parser.string_arg);*/
+		#if ENABLED(DWIN_CREALITY_LCD_JYERSUI)
+			jyersDWIN.updateStatus(parser.string_arg);
+		#else
+			ui.set_status_no_expire(parser.string_arg);
+		#endif
   else
     ui.reset_status();
 

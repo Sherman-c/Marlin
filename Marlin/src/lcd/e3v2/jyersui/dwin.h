@@ -105,6 +105,9 @@ enum menuID : uint8_t {
         ID_ColorSettings,
       ID_Advanced,
         ID_ProbeMenu,
+        #if ENABLED(SHAPING_MENU)
+          ID_InputShapingMenu,
+        #endif
         #if HAS_TRINAMIC_CONFIG
           ID_TMCMenu,
         #endif

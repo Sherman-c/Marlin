@@ -75,6 +75,15 @@
   #include "../../../feature/powerloss.h"
 #endif
 
+#if ENABLED(SHAPING_MENU)
+  #include "../../../module/stepper.h"
+
+	#define _MIN_INPUTSHAP_FREQ   1.0f
+	#define _MAX_INPUTSHAP_FREQ   200.0f
+	#define _MIN_INPUTSHAP_ZETA   0
+	#define _MAX_INPUTSHAP_ZETA 1
+#endif
+
 #if HAS_TRINAMIC_CONFIG
   #include "../../../module/stepper/trinamic.h"
 
@@ -720,7 +729,7 @@ void JyersDWIN::drawPrintFilename(const bool reset/*=false*/) {
 }
 
 void JyersDWIN::drawPrintProgressBar() {
-  uint8_t printpercent = sdprint ? card.percentDone() : (ui._get_progress() / 100);
+	uint8_t printpercent = sdprint ? card.percentDone() : ui.get_progress_percent();
   dwinIconShow(ICON, ICON_Bar, 15, 93);
   dwinDrawRectangle(1, COLOR_BARFILL, 16 + printpercent * 240 / 100, 93, 256, 113);
   dwinDrawIntValue(true, true, 0, DWIN_FONT_MENU, getColor(eeprom_settings.progress_percent, COLOR_PERCENT), COLOR_BG_BLACK, 3, 109, 133, printpercent);
@@ -2287,7 +2296,7 @@ void JyersDWIN::menuItemHandler(const uint8_t menu, const uint8_t item, bool dra
             case MPCMENU_SENSOR_RESPONSIVENESS:
               if (draw) {
                 drawMenuItem(row, ICON_Version, F("Sensor Resp."));
-                drawFloat(thermalManager.temp_hotend[0].mpc.sensor_responsiveness, row, false, 10000);
+                drawFloat(thermalManager.temp_hotend[0].mpc.sensor_responsiveness, row, false, (uint8_t) 10000);
               }
               else
                 modifyValue(thermalManager.temp_hotend[0].mpc.sensor_responsiveness, 0, 1, 10000);
@@ -2296,7 +2305,7 @@ void JyersDWIN::menuItemHandler(const uint8_t menu, const uint8_t item, bool dra
             case MPCMENU_AMBIENT_XFER_COEFF:
               if (draw) {
                 drawMenuItem(row, ICON_Version, F("Amb. xfer coeff"));
-                drawFloat(thermalManager.temp_hotend[0].mpc.ambient_xfer_coeff_fan0, row, false, 10000);
+                drawFloat(thermalManager.temp_hotend[0].mpc.ambient_xfer_coeff_fan0, row, false, (uint8_t) 10000);
               }
               else
                 modifyValue(thermalManager.temp_hotend[0].mpc.ambient_xfer_coeff_fan0, 0, 1, 10000);
@@ -2308,7 +2317,7 @@ void JyersDWIN::menuItemHandler(const uint8_t menu, const uint8_t item, bool dra
                 if (draw) {
                   drawMenuItem(row, ICON_Version, F("Amb. xfer adj."));
                   fan255_adjustment = thermalManager.temp_hotend[0].fanCoefficient();
-                  drawFloat(fan255_adjustment, row, false, 10000);
+                  drawFloat(fan255_adjustment, row, false, (uint8_t) 10000);
                 }
                 else
                   modifyValue(fan255_adjustment, 0, 1, 10000, []{ thermalManager.temp_hotend[0].applyFanAdjustment(fan255_adjustment); });
@@ -2822,7 +2831,8 @@ void JyersDWIN::menuItemHandler(const uint8_t menu, const uint8_t item, bool dra
       #define ADVANCED_BACK 0
       #define ADVANCED_BEEPER (ADVANCED_BACK + ENABLED(SOUND_MENU_ITEM))
       #define ADVANCED_PROBE (ADVANCED_BEEPER + ENABLED(HAS_BED_PROBE))
-      #define ADVANCED_TMC (ADVANCED_PROBE + ENABLED(HAS_TRINAMIC_CONFIG))
+			#define ADVANCED_INPUTSHAPING (ADVANCED_PROBE + ENABLED(SHAPING_MENU))
+			#define ADVANCED_TMC (ADVANCED_INPUTSHAPING + ENABLED(HAS_TRINAMIC_CONFIG))
       #define ADVANCED_CORNER (ADVANCED_TMC + 1)
       #define ADVANCED_LA (ADVANCED_CORNER + ENABLED(LIN_ADVANCE))
       #define ADVANCED_LOAD (ADVANCED_LA + ENABLED(ADVANCED_PAUSE_FEATURE))
@@ -2860,6 +2870,15 @@ void JyersDWIN::menuItemHandler(const uint8_t menu, const uint8_t item, bool dra
               drawMenuItem(row, ICON_StepX, F("Probe"), nullptr, true);
             else
               drawMenu(ID_ProbeMenu);
+            break;
+        #endif
+
+        #if ENABLED(SHAPING_MENU)
+          case ADVANCED_INPUTSHAPING:
+            if (draw)
+              drawMenuItem(row, ICON_StepX, GET_TEXT_F(MSG_INPUT_SHAPING), nullptr, true);
+            else
+              drawMenu(ID_InputShapingMenu);
             break;
         #endif
 
@@ -3019,6 +3038,76 @@ void JyersDWIN::menuItemHandler(const uint8_t menu, const uint8_t item, bool dra
         }
         break;
     #endif  // HAS_PROBE_MENU
+
+
+		#if ENABLED(SHAPING_MENU)
+ 			case ID_InputShapingMenu:
+
+        #define INPUTSHAPING_BACK 0
+        #define INPUTSHAPING_X_FREQ   (INPUTSHAPING_BACK + 1)
+        #define INPUTSHAPING_X_DAMP   (INPUTSHAPING_X_FREQ + 1)
+        #define INPUTSHAPING_Y_FREQ   (INPUTSHAPING_X_DAMP + 1)
+        #define INPUTSHAPING_Y_DAMP   (INPUTSHAPING_Y_FREQ + 1)
+        #define INPUTSHAPING_TOTAL    INPUTSHAPING_Y_DAMP
+
+        static float current_value = 0.0;
+
+        switch (item) {
+
+          case INPUTSHAPING_BACK:
+            if (draw)
+              drawMenuItem(row, ICON_Back, F("Back"));
+            else
+              drawMenu(ID_Advanced, ADVANCED_INPUTSHAPING);
+            break;
+
+          case INPUTSHAPING_X_FREQ:
+            current_value = stepper.get_shaping_frequency(X_AXIS);
+            if (draw) {
+              drawMenuItem(row, ICON_StepX, F("X Freq"));
+              drawFloat(current_value, row, false, 100);
+            }
+            else {
+              modifyValue(current_value, _MIN_INPUTSHAP_FREQ, _MAX_INPUTSHAP_FREQ, 100, []{stepper.set_shaping_frequency(X_AXIS, current_value);});
+            }
+            break;
+
+          case INPUTSHAPING_X_DAMP:
+            current_value = stepper.get_shaping_damping_ratio(X_AXIS);
+            if (draw) {
+              drawMenuItem(row, ICON_StepX, F("X Damping"));
+              drawFloat(current_value, row, false, 100);
+            }
+            else {
+              modifyValue(current_value, _MIN_INPUTSHAP_ZETA, _MAX_INPUTSHAP_ZETA, 100, []{stepper.set_shaping_damping_ratio(X_AXIS, current_value);});
+            }
+            break;
+
+          case INPUTSHAPING_Y_FREQ:
+            current_value = stepper.get_shaping_frequency(Y_AXIS);
+            if (draw) {
+              drawMenuItem(row, ICON_StepY, F("Y Freq"));
+              drawFloat(current_value, row, false, 100);
+            }
+            else {
+              modifyValue(current_value, _MIN_INPUTSHAP_FREQ, _MAX_INPUTSHAP_FREQ, 100, []{stepper.set_shaping_frequency(Y_AXIS, current_value);});
+            }
+            break;
+
+          case INPUTSHAPING_Y_DAMP:
+            current_value = stepper.get_shaping_damping_ratio(Y_AXIS);
+            if (draw) {
+              drawMenuItem(row, ICON_StepY, F("Y Damping"));
+              drawFloat(current_value, row, false, 100);
+            }
+            else {
+              modifyValue(current_value, _MIN_INPUTSHAP_ZETA, _MAX_INPUTSHAP_ZETA, 100, []{stepper.set_shaping_damping_ratio(Y_AXIS, current_value);});
+            }
+            break;
+        }
+      break;
+    #endif
+
 
     #if HAS_TRINAMIC_CONFIG
       case ID_TMCMenu:
@@ -4076,6 +4165,9 @@ FSTR_P JyersDWIN::getMenuTitle(const uint8_t menu) {
     #if HAS_BED_PROBE
       case ID_ProbeMenu:    return F("Bed Probe");
     #endif
+    #if ENABLED(SHAPING_MENU)
+      case ID_InputShapingMenu:  return GET_TEXT_F(MSG_INPUT_SHAPING);
+    #endif
     #if HAS_TRINAMIC_CONFIG
       case ID_TMCMenu:      return GET_TEXT_F(MSG_TMC_DRIVERS);
     #endif
@@ -4150,6 +4242,10 @@ uint8_t JyersDWIN::getMenuSize(const uint8_t menu) {
     #if HAS_BED_PROBE
       case ID_ProbeMenu:    return PROBE_TOTAL;
     #endif
+    #if ENABLED(SHAPING_MENU)
+      case ID_InputShapingMenu:  return INPUTSHAPING_TOTAL;
+    #endif
+
     #if HAS_TRINAMIC_CONFIG
       case ID_TMCMenu:      return TMC_TOTAL;
       case ID_TMCMenu:      return TMC_TOTAL;
@@ -5033,7 +5129,8 @@ void MarlinUI::init_lcd() {
     switch (message) {
       case PAUSE_MESSAGE_INSERT:  jyersDWIN.confirmHandler(Popup_FilInsert);  break;
       case PAUSE_MESSAGE_PURGE:
-      case PAUSE_MESSAGE_OPTION:  jyersDWIN.popupHandler(Popup_PurgeMore);  break;
+      case PAUSE_MESSAGE_OPTION:  pause_menu_response = PAUSE_RESPONSE_WAIT_FOR;
+																	jyersDWIN.popupHandler(Popup_PurgeMore);  break;
       case PAUSE_MESSAGE_HEAT:    jyersDWIN.confirmHandler(Popup_HeaterTime); break;
       case PAUSE_MESSAGE_WAITING: jyersDWIN.drawPrintScreen();          break;
       default: break;

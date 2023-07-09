@@ -53,6 +53,8 @@
   #include "../../../lcd/e3v2/creality/dwin.h"
 #elif ENABLED(DWIN_LCD_PROUI)
   #include "../../../lcd/e3v2/proui/dwin.h"
+#elif ENABLED(DWIN_CREALITY_LCD_JYERSUI)
+	#include "../../../lcd/e3v2/jyersui/dwin.h"
 #endif
 
 #if HAS_MULTI_HOTEND
@@ -429,7 +431,7 @@ G29_TYPE GcodeSuite::G29() {
       if (DEBUGGING(LEVELING)) DEBUG_ECHOLNPGM("> 3-point Leveling");
       points[0].z = points[1].z = points[2].z = 0;  // Probe at 3 arbitrary points
     #elif ENABLED(AUTO_BED_LEVELING_BILINEAR)
-      TERN_(DWIN_LCD_PROUI, dwinLevelingStart());
+			TERN_(DWIN_LCD_PROUI, dwinLevelingStart());
     #endif
 
     TERN_(EXTENSIBLE_UI, ExtUI::onLevelingStart());
@@ -439,7 +441,7 @@ G29_TYPE GcodeSuite::G29() {
 
       #if ENABLED(PREHEAT_BEFORE_LEVELING)
         if (!abl.dryrun) probe.preheat_for_probing(LEVELING_NOZZLE_TEMP,
-          #if ALL(DWIN_LCD_PROUI, HAS_HEATED_BED)
+          #if ANY(DWIN_LCD_PROUI, DWIN_CREALITY_LCD_JYERSUI) && HAS_HEATED_BED
             hmiData.bedLevT
           #else
             LEVELING_BED_TEMP
